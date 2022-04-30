@@ -1,2 +1,5 @@
 *.csv
 ./reqs/*
+asl_alphabet_train/
+asl_alphabet_test/
+model_vgg.pth

@@ -6,15 +6,15 @@ import numpy as np
 import pandas as pd
 
 import torch
-from torchvision.models import detection
+import torchvision.models as models
 import torch.nn as nn
 import torch.nn.functional as F
 import PIL.Image as Image
 from torchvision.transforms import ToTensor, ToPILImage
 
-alphabet = ['a','b','c','d','e','f','g','h','i','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y']
+alphabet_mnist = ['a','b','c','d','e','f','g','h','i','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y']
 
-# define our model
+# define our models
 class MNist_Net(nn.Module):
     def __init__(self):
         super(MNist_Net, self).__init__()
@@ -34,6 +34,45 @@ class MNist_Net(nn.Module):
         #x = F.avg_pool2d(x, 4)
         return F.log_softmax(x)
 
+class MNist_Net3(nn.Module):
+    def __init__(self):
+        super(MNist_Net3, self).__init__()
+        self.cov = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size = 3, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(32,64, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2,2),
+            nn.BatchNorm2d(64),
+        
+            nn.Conv2d(64, 128, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(128 ,128, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2,2),
+            
+            nn.Conv2d(128, 256, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.Conv2d(256,256, kernel_size = 3, stride = 1, padding = 1),
+            nn.ReLU(),
+            nn.MaxPool2d(2,2)
+        )
+        self.linear = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(2304,1024),
+            nn.ReLU(),
+            nn.BatchNorm1d(1024),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512,24)
+        )
+    
+    def forward(self, x):
+        x = x.view(-1, 1, 28, 28)
+        x = self.cov(x)
+        x = self.linear(x)
+        return F.log_softmax(x)
+
 
 def camera():
     cap = cv2.VideoCapture(0)
@@ -42,7 +81,7 @@ def camera():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    fps = 10
+    fps = 1
     prev_t = 0
     # capture video frames
     while True:
@@ -54,9 +93,9 @@ def camera():
                 prev_t = time.time()
 
                 # generate prediction
-                mnist_frame = preprocess(frame, (784))
-                preds = predict(mnist_frame)
-                print(f'{alphabet[torch.argmax(preds)]}')
+                mnist_frame, tensor = preprocess_mnist(frame, (784,))
+                preds = predict(tensor)
+                print(f'{alphabet_mnist[torch.argmax(preds)]}')
 
                 # display frame
                 cv2.imshow('output', frame)
@@ -71,7 +110,7 @@ def camera():
             sys.exit(0)
                 
 
-def preprocess(img, dims):
+def preprocess_mnist(img, dims):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = img.shape[0], img.shape[1]
     center = (img.shape[0] / 2, img.shape[1] / 2)
@@ -80,9 +119,9 @@ def preprocess(img, dims):
     crop_img = img[int(y):int(y+h), int(x):int(x+w)]
 
     resized_img = cv2.resize(crop_img, (28, 28))
-    img = img.reshape((784,)) / 255.0
+    tensor = resized_img.reshape((784,)) / 255.0
 
-    return resized_img
+    return resized_img, tensor
 
 
 def predict(img):
@@ -97,8 +136,9 @@ if __name__ == '__main__':
     # model init
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = MNist_Net()
-    model.load_state_dict(torch.load('model_mnist.pth'))
+    # MNIST model with our own network
+    model = MNist_Net3()
+    model.load_state_dict(torch.load('model_weights/model4.pth'))
     model.eval()
 
     camera() # main camera loop
