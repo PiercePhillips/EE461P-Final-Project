@@ -21,7 +21,7 @@ def camera():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    fps = 1
+    fps = 30
     prev_t = 0
     # capture video frames
     while True:
@@ -35,11 +35,28 @@ def camera():
                 # generate prediction
                 vgg_frame, tensor = preprocess(frame)
                 preds = predict(tensor)
-                print(f'{alphabet_vgg[torch.argmax(preds)]}')
+                letter = alphabet_vgg[torch.argmax(preds)]
+                val = torch.max(preds).item()
+                print(f'{letter} --> {val}', end='\r')
+                sys.stdout.flush()
+
+                # TODO: thresholding
+                if letter == 'nothing':
+                    letter = ''
+                if letter == 'del':
+                    letter = '<-'
+                if letter == 'space':
+                    letter = '_'
 
                 # display frame
-                cv2.imshow('output', frame)
+                # cv2.imshow('output', frame)
                 cv2.imshow('resized_output', cv2.resize(vgg_frame, (224, 224)))
+
+                # display predicted frame
+                output = np.zeros((300, 300, 3))
+                output[:] = (255, 255, 255)
+                cv2.putText(output, letter, (output.shape[0]//2 - 10, output.shape[1]//2), cv2.FONT_HERSHEY_SIMPLEX, 4, (0, 0, 0), 3)
+                cv2.imshow('predicted letter', output)
 
                 cv2.waitKey(1)
 
@@ -84,7 +101,7 @@ if __name__ == '__main__':
     number_features = model_vgg.classifier[6].in_features
     model_vgg.classifier[6] = nn.Linear(number_features, 29)
 
-    model_vgg.load_state_dict(torch.load('model_vgg.pth'))
+    model_vgg.load_state_dict(torch.load('model_vgg2.pth'))
     model_vgg.eval()
 
     camera() # main camera loop
